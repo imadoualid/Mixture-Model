@@ -1,0 +1,322 @@
+---
+title: "Projet Mixture model : JAFFE"
+output: html_notebook
+---
+
+#Binome:
+- Wacim BELAHCEL
+- Imad Oualid KACIMI
+
+```{r}
+library(R.matlab)
+library(Factoshiny)
+library(NbClust)
+library(Rmixmod)
+library(mclust)
+library(clusterSim)
+library(aricode)
+library(h2o)
+library(Rtsne)
+library(tidyverse)
+
+```
+# Q1 : Introduction table de donnée
+JAFFE est un dataset Contenant des images d'expressions facials de femme japonaises, avec 676 variables, le dataset est repartie en 10 classes.
+
+```{r}
+jaffe = readMat(con="C:\\Users\\GIGABYTE\\Downloads\\DATA_MATLAB - Projet-master-MLDS\\DATA_MATLAB - Projet-master-MLDS\\jaffe.mat")
+```
+
+
+
+```{r}
+y_data = as.data.frame(jaffe$y)
+x_data = as.data.frame(jaffe$X)
+#x_test_data = as.data.frame(mnist$testX)
+#y_test_data = as.data.frame(mnist$testY)
+```
+
+
+
+```{r}
+x_data$y<-as.factor(t(y_data))
+
+x_data <- x_data[!duplicated(x_data[,1:64]), ]
+y_data <- as.data.frame(x_data$y)
+```
+
+# Question 2: ACP
+Depuis le graph des individus, on peut remarquer que la plus part des classes sont parfaitement séparable entre elles, cependant il existe un chevauchement important entre certains clusters, notamment y_3 et y_10 ou y_1 et y_7.
+Lorsque l'on représente uniquement les modalité de la variable cible y, on peut confirmer notre précedente observation, on remarque aussi que les individu de la classe y_4 contribuent fortement à la creation de l'axe 2, la méme observation peut étre faite pour y_6 et y_3 par rapport à l'axe 1.
+
+```{r}
+res.PCA<-PCA(x_data,quali.sup=c(677),graph=FALSE)
+plot.PCA(res.PCA,choix='var',title="Graphe des variables de l'ACP")
+plot.PCA(res.PCA,invisible=c('quali','ind.sup'),habillage=677,title="Graphe des individus de l'ACP",label ='none')
+```
+
+
+
+```{r}
+res.PCA<-PCA(x_data,quali.sup=c(677),graph=FALSE)
+plot.PCA(res.PCA,choix='var',title="Graphe des variables de l'ACP")
+plot.PCA(res.PCA,invisible=c('ind','ind.sup'),habillage=677,title="Graphe des individus de l'ACP",label =c('quali'))
+```
+
+
+
+
+
+
+
+
+# Q4: Clustering Kmean / CAH
+La plus part des algorithme ne trouvent que 4 classes en tant que nombre optimal lorsque nous appliquons un clustering, ce qui est explicable si on compare cela à nos observations precedentes ou nous avions remarquer qu'il existe un chevauchement entre differentes classes dans une meme partition, nous remarquons aussi que l'algorithme CAH average retrouve bel et bien 7 classes.
+nous pouvons donc proposer 4 classes si nous nous basons uniquement sur ces rsultats la.
+
+```{r}
+res_cah_ward <-NbClust(x_data[,1:676], distance = "euclidean", min.nc=2, max.nc=10, method = "ward.D2",
+index = "ch")
+res_cah_average<-NbClust(x_data[,1:676], distance = "euclidean", min.nc=2, max.nc=10, method = "average",
+index = "ch")
+res_cah_complete <-NbClust(x_data[,1:676], distance = "euclidean", min.nc=2, max.nc=10, method = "complete",
+index = "ch")
+res_cah_single <-NbClust(x_data[,1:676], distance = "euclidean", min.nc=2, max.nc=10, method = "single",
+index = "ch")
+res_cah_kmeans <-NbClust(x_data[,1:676], distance = "euclidean", min.nc=2, max.nc=10, method = "kmeans",
+index = "ch")
+
+```
+
+
+
+```{r}
+
+plot(res.PCA$ind$coord,col=res_cah_ward$Best.partition, main = paste("res_cah_ward clusters : ",length(unique(res_cah_ward$Best.partition))))
+
+plot(res.PCA$ind$coord,col=res_cah_average$Best.partition, main = paste("res_cah_average clusters :",length(unique(res_cah_average$Best.partition))))
+
+
+plot(res.PCA$ind$coord,col=res_cah_complete$Best.partition,  main = paste("res_cah_complete clusters :",length(unique(res_cah_complete$Best.partition))))
+
+
+plot(res.PCA$ind$coord,col=res_cah_single$Best.partition, main = paste("res_cah_single clusters :",length(unique(res_cah_single$Best.partition))))
+
+
+plot(res.PCA$ind$coord,col=res_cah_kmeans$Best.partition, main = paste("res_cah_kmeans clusters :",length(unique(res_cah_kmeans$Best.partition))))
+
+```
+
+# Q5 : HCPC
+En observant aussi le graph de l'inertie, on peut remarquer un coude à la 3 éme barre, on pourrait aussi aller j'usqu'à la 4 éme barre, il est donc possible de proposer 3 à 4 classes.
+```{r}
+res.PCA<-PCA(x_data,ncp=Inf, scale.unit=FALSE,quali.sup=c(677),graph=FALSE)
+res.HCPC<-HCPC(res.PCA,nb.clust=3,consol=FALSE,graph=FALSE)
+plot.HCPC(res.HCPC,choice='tree',title='Arbre hiérarchique')
+plot.HCPC(res.HCPC,choice='map',draw.tree=FALSE,title='Plan factoriel')
+plot.HCPC(res.HCPC,choice='3D.map',ind.names=FALSE,centers.plot=FALSE,angle=60,title='Arbre hiérarchique sur le plan factoriel')
+```
+# Q6 : comparaison avec HCPC
+```{r}
+table(as.vector(res.HCPC$data.clust[,"clust"]),as.vector(res_cah_ward$Best.partition))
+table(as.vector(res.HCPC$data.clust[,"clust"]),as.vector(res_cah_kmeans$Best.partition))
+table(as.vector(res.HCPC$data.clust[,"clust"]),as.vector(res_cah_complete$Best.partition))
+table(as.vector(res.HCPC$data.clust[,"clust"]),as.vector(res_cah_single$Best.partition))
+table(as.vector(res.HCPC$data.clust[,"clust"]),as.vector(res_cah_average$Best.partition))
+```
+
+# Q7 : MCLUST et RMIXMOD
+Mclust trouve 10 classe et choisi comme meilleurs model le model VEV (le plus general volume/orientation variable et shape egale) avec une proportion des classe égal.
+Rmixmod trouve aussi 10 classes, cependant le package est beaucoup plus instable, nous avons du restreindre le choix des methodes à essayer, parmis les methodes gardé, la plus efficace est  VEV.
+Bien que la visualisation en utilisant le premier plan factorielle du PCA est difficile a lire, il a cependant l'air plus fidéle à l'original pour les methodes, nous pouvons donc proposer 10 clusters.
+```{r}
+set.seed(1)
+res.PCA<-PCA(x_data,ncp=15,quali.sup=c(677),graph=FALSE)
+
+res.mclust=Mclust(res.PCA$ind$coord,G = 1:10)
+summary(res.mclust$BIC)
+plot(res.mclust,what="BIC")
+names(res.mclust)
+table(res.mclust$class,as.vector(y_data[,1]))
+res.mclust$modelName
+
+adjustedRandIndex(res.mclust$class,as.vector(y_data[,1]))
+
+```
+```{r}
+set.seed(1)
+res.mixmod = mixmodCluster(data=as.data.frame(res.PCA$ind$coord),nbCluster=1:10,models=mixmodGaussianModel(listModels = c( "Gaussian_pk_Lk_Dk_A_Dk", "Gaussian_p_Lk_Dk_A_Dk")))
+# 
+#res.mixmod
+summary(res.mixmod)
+predictions= mixmodPredict(as.data.frame(res.PCA$ind$coord), classificationRule=res.mixmod["bestResult"])
+```
+
+```{r}
+
+pred.rmix = as.vector(predictions["partition"])
+pred.mclust = as.vector(res.mclust$class)
+true_values = as.vector(y_data[,1])
+
+plot(res.PCA$ind$coord,col=true_values, main = "original")
+
+plot(res.PCA$ind$coord,col=pred.mclust, main = "mclust")
+
+plot(res.PCA$ind$coord,col=pred.rmix, main = "rmixmod")
+
+```
+
+# Q8 : comparer les partitions de mclust et rmixmod
+Les resultats des deux packages sont plus ou moins similaire sur la plus part des clusters (exemple cluster 6 de mclust plus ou moins égale au cluster 8 de rmixmod), nous remarquons cependant un desaccord pour le cluster 2 de mclust avec l'nsembles des clusters de rmixmod
+```{r}
+table(pred.rmix,pred.mclust)
+```
+
+# Q9: MclustDR
+MclustDR est une methode de reduction de la dimension linéaire utilisé afin de visualiser le resultat de clustering ou de classification obtenue par des mélanges gaussiens.
+
+```{r}
+res.mclustdr = MclustDR(res.mclust)
+summary(res.mclustdr)
+plot(res.mclustdr, what="scatterplot")
+plot(res.mclustdr, what="evalues")
+```
+# Q10: Comparaison des different algorithmes
+D'apres les resultats obtenu, on remarque que le nombre de cluster optimal est bel et bien 10, aussi, mclust semble obtenir les meilleurs resultats sur l'ensemble des methodes, les methodes de melanges en general semble obtenir de bien meilleurs resultats comparé aux algorithmes de clustering standard.
+
+Si nous comparons Mclust à Rmixmod, on voit que mclust semble plus performant.
+Mclust semble aussi plus rapide, ceci peut étre expliquer par le fait que les deux méthodes utilises de initialisations differente au lancement de leurs algorithmes (cah pour mclust, et un smallEM pour rmixmod), la methode d'initialisation de mclust semble plus rapide et donner de meilleurs resultats en moyenne.
+
+```{r}
+pred.rmix = as.vector(predictions["partition"])
+pred.mclust = as.vector(res.mclust$class)
+true_values = as.vector(y_data[,1])
+
+
+print(paste("Rmixmod taux de mal classé : ", 1- comparing.Partitions(pred.rmix,true_values)))
+print(paste("Mclust taux de mal classé : ", 1-comparing.Partitions(pred.mclust,true_values)))
+print(paste("cah ward taux de mal classé : ", 1-comparing.Partitions(res_cah_ward$Best.partition,true_values)))
+print(paste("cah average taux de mal classé : ", 1-comparing.Partitions(res_cah_average$Best.partition,true_values)))
+print(paste("cah complete de mal classé : ", 1-comparing.Partitions(res_cah_complete$Best.partition,true_values)))
+print(paste("cah singe  taux de mal classé : ", 1-comparing.Partitions(res_cah_single$Best.partition,true_values)))
+print(paste("kmeans  taux de mal classé : ", 1-comparing.Partitions(res_cah_kmeans$Best.partition,true_values)))
+
+print("")
+print("")
+
+
+print(paste("Rmixmod ARI : ",adjustedRandIndex(pred.rmix,true_values)))
+(paste("Mclust ARI : ",adjustedRandIndex(pred.mclust,true_values)))
+print(paste("cah_ward ARI : ",adjustedRandIndex(res_cah_ward$Best.partition,true_values)))
+(paste("cah_average ARI : ",adjustedRandIndex(res_cah_average$Best.partition,true_values)))
+(paste("cah_complete ARI : ",adjustedRandIndex(res_cah_complete$Best.partition,true_values)))
+(paste("cah_single ARI : ",adjustedRandIndex(res_cah_single$Best.partition,true_values)))
+(paste("kmeans ARI : ",adjustedRandIndex(res_cah_kmeans$Best.partition,true_values)))
+
+print("")
+print("")
+
+print(paste("Rmixmod NMI : ",NMI(pred.rmix,true_values)))
+(paste("Mclust NMI : ",NMI(pred.mclust,true_values)))
+print(paste("cah_ward NMI : ",NMI(res_cah_ward$Best.partition,true_values)))
+(paste("cah_average NMI : ",NMI(res_cah_average$Best.partition,true_values)))
+(paste("cah_complete NMI : ",NMI(res_cah_complete$Best.partition,true_values)))
+(paste("cah_single NMI : ",NMI(res_cah_single$Best.partition,true_values)))
+(paste("kmeans NMI : ",NMI(res_cah_kmeans$Best.partition,true_values)))
+```
+
+
+
+
+
+# Q11: TSNE
+
+```{r}
+
+tsne_res <- Rtsne(x_data[,1:676], dims = 2, perplexity=30, verbose=TRUE, max_iter = 2500)
+
+```
+
+
+```{r}
+tnse_df = as.data.frame(tsne_res$Y)
+tnse_df = cbind(tnse_df,true_values, pred.rmix, pred.mclust)
+names(tnse_df) = c("c1", "c2", "lab", "rmix", "mclust")
+ggplot(tnse_df, aes(c1, y=c2, color=as.factor(lab)) ) + geom_point()
+ggplot(tnse_df, aes(c1, y=c2, color=as.factor(rmix)) ) + geom_point()
+ggplot(tnse_df, aes(c1, y=c2, color=as.factor(mclust))) + geom_point()
+```
+# Q12 : Reduction par autoencoder
+On remarque que mclust obtient de meilleurs resultats de rmixmod.
+De maniére plus general la methode de reduction de dimension à l'aide d'auto encoder semble donner de meilleurs résultats et extraire plus d'informations (en particulier des relations non lineaire) que PCA.
+
+```{r}
+
+h2o.init()
+```
+
+
+```{r}
+ae_model <- h2o.deeplearning(x=c(1:676),
+                                  model_id="ae_model",
+                                  training_frame=as.h2o(x_data[,1:676]),
+                                  activation="Tanh",
+                                  ignore_const_cols=FALSE,
+                                  autoencoder=TRUE,
+                                  hidden=c(32, 16, 8, 16,32),
+                                  epochs=50,
+                                  reproducible=T,
+                                  seed=1)
+```
+
+
+
+```{r}
+features <- h2o.deepfeatures(ae_model, as.h2o(x_data[,1:676]), layer=3)
+```
+
+
+```{r}
+set.seed(1)
+res.mclust=Mclust(features, G = 1:10)
+summary(res.mclust$BIC)
+plot(res.mclust,what="BIC")
+names(res.mclust)
+table(res.mclust$class,as.vector(y_data[,1]))
+res.mclust$modelName
+
+adjustedRandIndex(res.mclust$class,as.vector(y_data[,1]))
+```
+
+```{r}
+res.mixmod = mixmodCluster(data=as.data.frame(features),nbCluster=1:10,models=mixmodGaussianModel(listModels = c("Gaussian_p_Lk_Ck", "Gaussian_pk_Lk_Ck")))
+```
+
+
+```{r}
+predictions= mixmodPredict(as.data.frame(features), classificationRule=res.mixmod["bestResult"])
+```
+
+
+
+```{r}
+
+
+
+pred.rmix = as.vector(predictions["partition"])
+pred.mclust = as.vector(res.mclust$class)
+true_values = as.vector(y_data[,1])
+
+print(paste("Rmixmod taux de bien classé : ", comparing.Partitions(pred.rmix,true_values)))
+
+print(paste("Mclust taux de bien classé : ", comparing.Partitions(pred.mclust,true_values)))
+
+
+print(paste("Rmixmod ARI : ",adjustedRandIndex(pred.rmix,true_values)))
+(paste("Mclust ARI : ",adjustedRandIndex(pred.mclust,true_values)))
+
+print(paste("Rmixmod NMI : ",NMI(pred.rmix,true_values)))
+(paste("Mclust NMI : ",NMI(pred.mclust,true_values)))
+```
+```
+
